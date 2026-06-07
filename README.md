@@ -83,6 +83,11 @@ Notion 联系人库至少需要包含以下属性：
 
 - `姓名/昵称`：用于报名名单和开奖结果展示。
 - `QQ`：用于匹配群成员 QQ。支持英文逗号或中文逗号分隔多个 QQ，例如 `123456, 234567`。
+示例：
+
+<img width="1374" height="979" alt="image" src="https://github.com/user-attachments/assets/6a4a20ac-5ba7-4326-9411-1c344cc529c4" />
+
+
 
 ## 指令
 
@@ -168,23 +173,3 @@ Notion 联系人库至少需要包含以下属性：
 - 启用 Notion：插件启动时读取联系人库，建立 `QQ -> 联系人` 映射；同一联系人名下的多个 QQ 会被视为同一个报名身份。
 - Notion 映射只在插件启动时刷新，运行期间修改联系人库后需要重启机器人生效。
 
-## 发布
-
-构建 PyPI 包：
-
-```bash
-python -m build
-```
-
-上传 PyPI：
-
-```bash
-python -m twine upload dist/*
-```
-
-提交 NoneBot 插件商店前，请确认：
-
-- `pyproject.toml` 中的包名、版本、仓库地址正确。
-- 插件包含 `__plugin_meta__` 元数据。
-- README 已说明安装、加载、配置和指令用法。
-- PyPI 包已发布，且仓库代码与发布版本一致。
