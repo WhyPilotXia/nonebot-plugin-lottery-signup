@@ -3,18 +3,38 @@ import time
 from typing import Union
 
 from nonebot.log import logger
-from notion_client import Client
 
 from .config import plugin_config
 
 
-notion = Client(auth=plugin_config.notion_token)
+notion = None
 
 # QQ -> contact_id
 qq_to_contact_id: dict[str, str] = {}
 
 # contact_id -> contact_info
 contact_id_to_info: dict[str, dict[str, str]] = {}
+
+
+def is_notion_enabled() -> bool:
+    return plugin_config.notion_enabled
+
+
+def _get_notion_client():
+    global notion
+
+    if not plugin_config.notion_enabled:
+        return None
+
+    if notion is None:
+        try:
+            from notion_client import Client
+        except ImportError as e:
+            raise RuntimeError("已配置 notion_token，但未安装 notion-client") from e
+
+        notion = Client(auth=plugin_config.notion_token)
+
+    return notion
 
 
 def _read_property(prop: dict) -> str:
@@ -46,6 +66,10 @@ def _read_property(prop: dict) -> str:
 
 
 def _query_all_rows(data_source_id: str, page_size: int = 100) -> list[dict]:
+    client = _get_notion_client()
+    if client is None:
+        return []
+
     results = []
     start_cursor = None
 
@@ -60,7 +84,7 @@ def _query_all_rows(data_source_id: str, page_size: int = 100) -> list[dict]:
 
         for i in range(10):
             try:
-                resp = notion.data_sources.query(**kwargs)
+                resp = client.data_sources.query(**kwargs)
                 break
             except Exception as e:
                 if i >= 7:
@@ -81,6 +105,9 @@ def _query_all_rows(data_source_id: str, page_size: int = 100) -> list[dict]:
 
 
 def get_contacts() -> list[dict[str, str]]:
+    if not plugin_config.notion_enabled:
+        return []
+
     rows = _query_all_rows(plugin_config.lottery_contact_data_source_id)
     contacts = []
 
@@ -108,6 +135,12 @@ def get_contacts() -> list[dict[str, str]]:
 
 def refresh_contact_maps() -> dict[str, str]:
     global qq_to_contact_id, contact_id_to_info
+
+    if not plugin_config.notion_enabled:
+        qq_to_contact_id = {}
+        contact_id_to_info = {}
+        logger.info("未配置 notion_token，已使用 QQ 作为报名去重身份")
+        return qq_to_contact_id
 
     contacts = get_contacts()
     new_qq_to_contact_id = {}

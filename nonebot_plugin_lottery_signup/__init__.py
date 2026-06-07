@@ -3,24 +3,43 @@ import re
 from collections import defaultdict
 from datetime import datetime
 
-from nonebot import require, get_driver, get_bot
+from nonebot import require
 from nonebot.log import logger
-from nonebot.rule import Rule, to_me
-from nonebot import on_command, on_startswith, on_keyword, on_fullmatch, on_message
+from nonebot.plugin import PluginMetadata
+from nonebot.rule import Rule
+from nonebot import on_command
 from nonebot.matcher import Matcher
-from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, MessageEvent, ActionFailed
-from nonebot.adapters.onebot.v11 import GROUP_ADMIN, GROUP_OWNER, GROUP_MEMBER
-from nonebot.adapters.onebot.v11 import MessageSegment, Message, Event, escape
+from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, ActionFailed
+from nonebot.adapters.onebot.v11 import MessageSegment, Message
 from nonebot.typing import T_State
-from nonebot.params import ArgPlainText, CommandArg, ArgStr
+from nonebot.params import ArgPlainText, CommandArg
 
+from .config import Config
 from .lottery import execute_lottery, lotteries, parse_target_time
 from .registration import close_registration, make_registration_id, registrations
 from .utils import (
     At,
     get_display_name_by_identity,
     get_identity_by_qq,
+    is_notion_enabled,
     refresh_contact_maps,
+)
+
+__plugin_meta__ = PluginMetadata(
+    name="抽奖报名",
+    description="适用于 OneBot V11 的群聊定时抽奖、即时抽奖和限额报名插件",
+    usage=(
+        "/定时抽奖 项目名称 3h后\n"
+        "/报名 [选项字母]\n"
+        "/抽奖 @用户1 @用户2\n"
+        "/创建报名 项目名 5人 2026-6-18T18-00\n"
+        "/参加报名 [选项字母]\n"
+        "/停止报名 [选项字母]"
+    ),
+    type="application",
+    homepage="https://github.com/WhyPilotXia/nonebot-plugin-lottery-signup",
+    config=Config,
+    supported_adapters={"~onebot.v11"},
 )
 
 try:
@@ -32,6 +51,8 @@ except Exception:
 try:
     refresh_contact_maps()
 except Exception as e:
+    if is_notion_enabled():
+        raise RuntimeError("已启用 Notion 去重，但刷新联系人 QQ 映射失败") from e
     logger.error(f"刷新 Notion 联系人 QQ 映射失败：{e}")
 
 logger.opt(colors=True).info(
@@ -251,7 +272,7 @@ async def _process_registration_choices(
             joined.append(rdata["name"])
 
     if not has_valid:
-        if state['rejected']:
+        if state.get("rejected"):
             await matcher.finish("多次无效选择，撤销操作",reply=True)
         state['rejected'] = True
         await matcher.reject("无效的选择，请重新回复你想参加的项目字母。",reply=True)
@@ -331,7 +352,7 @@ async def _process_stop_registration_choices(
 
     choice = choices.strip().upper()
     if choice not in mapping:
-        if state['rejected']:
+        if state.get("rejected"):
             await matcher.finish("多次输错，取消停止",reply=True)
         state['rejected'] = True
         await matcher.reject("无效的选择，请重新回复要停止的项目字母。",reply=True)
