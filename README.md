@@ -1,5 +1,3 @@
-<div align="center">
-
 # nonebot-plugin-lottery-signup
 
 _NoneBot2 群聊抽奖与报名插件_
@@ -14,7 +12,7 @@ _NoneBot2 群聊抽奖与报名插件_
   <img src="https://img.shields.io/github/license/WhyPilotXia/nonebot-plugin-lottery-signup.svg" alt="License">
 </a>
 
-</div>
+
 
 适用于 NoneBot2 + OneBot V11 的群聊抽奖与报名插件，支持定时抽奖、即时抽奖、限额报名和多项目并发。Notion 联系人去重为可选功能：未配置 Notion 时，插件会直接使用 QQ 号作为去重身份。
 
