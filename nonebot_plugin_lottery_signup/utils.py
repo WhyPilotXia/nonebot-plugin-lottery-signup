@@ -1,5 +1,5 @@
+import asyncio
 import json
-import time
 from typing import Union
 
 from nonebot.log import logger
@@ -28,11 +28,11 @@ def _get_notion_client():
 
     if notion is None:
         try:
-            from notion_client import Client
+            from notion_client import AsyncClient
         except ImportError as e:
             raise RuntimeError("已配置 notion_token，但未安装 notion-client,请在当前python环境执行 pip install notion-client>=2.2.0") from e
 
-        notion = Client(auth=plugin_config.notion_token)
+        notion = AsyncClient(auth=plugin_config.notion_token)
 
     return notion
 
@@ -65,7 +65,7 @@ def _read_property(prop: dict) -> str:
     return ""
 
 
-def _query_all_rows(data_source_id: str, page_size: int = 100) -> list[dict]:
+async def _query_all_rows(data_source_id: str, page_size: int = 100) -> list[dict]:
     client = _get_notion_client()
     if client is None:
         return []
@@ -84,12 +84,12 @@ def _query_all_rows(data_source_id: str, page_size: int = 100) -> list[dict]:
 
         for i in range(10):
             try:
-                resp = client.data_sources.query(**kwargs)
+                resp = await client.data_sources.query(**kwargs)
                 break
             except Exception as e:
                 if i >= 7:
                     logger.warning(f"查询 Notion 联系人失败，第 {i + 1} 次重试：{e}")
-                time.sleep(1)
+                await asyncio.sleep(1)
 
                 if i >= 9:
                     raise
@@ -104,11 +104,11 @@ def _query_all_rows(data_source_id: str, page_size: int = 100) -> list[dict]:
     return results
 
 
-def get_contacts() -> list[dict[str, str]]:
+async def get_contacts() -> list[dict[str, str]]:
     if not plugin_config.notion_enabled:
         return []
 
-    rows = _query_all_rows(plugin_config.lottery_contact_data_source_id)
+    rows = await _query_all_rows(plugin_config.lottery_contact_data_source_id)
     contacts = []
 
     for row in rows:
@@ -133,7 +133,7 @@ def get_contacts() -> list[dict[str, str]]:
     return contacts
 
 
-def refresh_contact_maps() -> dict[str, str]:
+async def refresh_contact_maps() -> dict[str, str]:
     global qq_to_contact_id, contact_id_to_info
 
     if not plugin_config.notion_enabled:
@@ -142,7 +142,7 @@ def refresh_contact_maps() -> dict[str, str]:
         logger.info("未配置 notion_token，已使用 QQ 作为报名去重身份")
         return qq_to_contact_id
 
-    contacts = get_contacts()
+    contacts = await get_contacts()
     new_qq_to_contact_id = {}
     new_contact_id_to_info = {}
 

@@ -3,7 +3,7 @@ import re
 from collections import defaultdict
 from datetime import datetime
 
-from nonebot import require
+from nonebot import get_driver, require
 from nonebot.log import logger
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
@@ -48,21 +48,25 @@ except Exception:
     logger.warning("请重启程序！")
     scheduler = None
 
-try:
-    refresh_contact_maps()
-except Exception as e:
-    if is_notion_enabled():
-        logger.opt(exception=e).error("已启用 Notion 去重，但刷新联系人 QQ 映射失败,fallback到QQ去重")
-    logger.error(f"刷新 Notion 联系人 QQ 映射失败：{e}")
-
 logger.opt(colors=True).info(
     "已检测到软依赖<y>nonebot_plugin_apscheduler</y>, <g>开启定时任务功能</g>"
     if scheduler
     else "未检测到软依赖<y>nonebot_plugin_apscheduler</y>，<r>定时任务功能未启用</r>"
 )
 
+driver = get_driver()
 message_history = defaultdict(list)
 active_tasks = {}
+
+
+@driver.on_startup
+async def _refresh_contact_maps_on_startup():
+    try:
+        await refresh_contact_maps()
+    except Exception as e:
+        if is_notion_enabled():
+            logger.opt(exception=e).error("已启用 Notion 去重，但刷新联系人 QQ 映射失败,fallback到QQ去重")
+        logger.error(f"刷新 Notion 联系人 QQ 映射失败：{e}")
 
 
 def startedgroupchecker():
