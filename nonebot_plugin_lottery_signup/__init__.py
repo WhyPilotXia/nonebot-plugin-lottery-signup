@@ -15,15 +15,6 @@ from nonebot.typing import T_State
 from nonebot.params import ArgPlainText, CommandArg
 
 from .config import Config
-from .lottery import execute_lottery, lotteries, parse_target_time
-from .registration import close_registration, make_registration_id, registrations
-from .utils import (
-    At,
-    get_display_name_by_identity,
-    get_identity_by_qq,
-    is_notion_enabled,
-    refresh_contact_maps,
-)
 
 __plugin_meta__ = PluginMetadata(
     name="抽奖报名",
@@ -48,6 +39,19 @@ except Exception:
     logger.warning("请重启程序！")
     scheduler = None
 
+require("nonebot_plugin_localstore")
+
+from .lottery import execute_lottery, lotteries, parse_target_time
+from .persistence import load_state, restore_scheduled_tasks, save_state
+from .registration import close_registration, make_registration_id, registrations
+from .utils import (
+    At,
+    get_display_name_by_identity,
+    get_identity_by_qq,
+    is_notion_enabled,
+    refresh_contact_maps,
+)
+
 logger.opt(colors=True).info(
     "已检测到软依赖<y>nonebot_plugin_apscheduler</y>, <g>开启定时任务功能</g>"
     if scheduler
@@ -57,6 +61,7 @@ logger.opt(colors=True).info(
 driver = get_driver()
 message_history = defaultdict(list)
 active_tasks = {}
+load_state()
 
 
 @driver.on_startup
@@ -67,6 +72,14 @@ async def _refresh_contact_maps_on_startup():
         if is_notion_enabled():
             logger.opt(exception=e).error("已启用 Notion 去重，但刷新联系人 QQ 映射失败,fallback到QQ去重")
         logger.error(f"刷新 Notion 联系人 QQ 映射失败：{e}")
+
+
+@driver.on_bot_connect
+async def _restore_tasks_on_bot_connect(bot: Bot):
+    try:
+        await restore_scheduled_tasks(bot, scheduler)
+    except Exception as e:
+        logger.opt(exception=e).error("恢复定时抽奖/报名任务失败")
 
 
 def startedgroupchecker():
@@ -139,6 +152,7 @@ async def _create_registration(bot: Bot, event: GroupMessageEvent, args: Message
         "limit": limit,
         "participants": {},
         "job_id": job_id,
+        "bot_id": str(bot.self_id),
     }
 
     scheduler.add_job(
@@ -148,6 +162,7 @@ async def _create_registration(bot: Bot, event: GroupMessageEvent, args: Message
         args=(bot, group_id, rid),
         id=job_id,
     )
+    save_state()
 
     await create_registration_cmd.finish(
         f"已创建报名项目【{name}】\n名额：{limit}人\n截止时间：{target_time.strftime('%Y-%m-%d %H:%M:%S')}\n群友发送 /参加报名 即可报名。",reply=True
@@ -181,6 +196,7 @@ async def _join_registration(bot: Bot, matcher: Matcher, event: GroupMessageEven
         await close_registration(bot, group_id, rid, reason="full")
         return
 
+    save_state()
     await matcher.finish(
         f"报名成功！您已参加【{rdata['name']}】。\n当前人数：{len(rdata['participants'])}/{rdata['limit']}"
     )
@@ -240,6 +256,7 @@ async def _process_registration_choices(
     missing = []
     full = []
     has_valid = False
+    state_changed = False
 
     for char in selected_chars:
         if char not in mapping:
@@ -267,6 +284,7 @@ async def _process_registration_choices(
             "qq": event.user_id,
             "name": get_display_name_by_identity(identity),
         }
+        state_changed = True
 
         if len(rdata["participants"]) >= rdata["limit"]:
             full.append(rdata["name"])
@@ -274,6 +292,9 @@ async def _process_registration_choices(
             await close_registration(bot, event.group_id, rid, reason="full")
         else:
             joined.append(rdata["name"])
+
+    if state_changed:
+        save_state()
 
     if not has_valid:
         if state.get("rejected"):
@@ -414,6 +435,8 @@ async def _create_lottery(bot: Bot, event: GroupMessageEvent, args: Message = Co
         "setter": event.get_user_id(),
         "time": target_time,
         "participants": {},
+        "job_id": f"lottery_{lid}",
+        "bot_id": str(bot.self_id),
     }
 
     scheduler.add_job(
@@ -423,6 +446,7 @@ async def _create_lottery(bot: Bot, event: GroupMessageEvent, args: Message = Co
         args=(bot, group_id, lid),
         id=f"lottery_{lid}",
     )
+    save_state()
 
     await create_lottery_cmd.finish(
         f"已成功创建抽奖项目【{name}】\n开奖时间：{target_time.strftime('%Y-%m-%d %H:%M:%S')}\n群友发送 /报名 即可参与！",reply=True
@@ -459,6 +483,7 @@ async def _join_lottery_check(
             "name": get_display_name_by_identity(identity),
         }
 
+        save_state()
         await matcher.finish(f"报名成功！您已参加【{ldata['name']}】的抽奖。",reply=True)
 
     mapping = {}
@@ -493,6 +518,7 @@ async def _process_choices(
     already = []
     missing = []
     has_valid = False
+    state_changed = False
 
     for char in selected_chars:
         if char not in mapping:
@@ -516,9 +542,13 @@ async def _process_choices(
                 "name": get_display_name_by_identity(identity),
             }
             joined.append(ldata["name"])
+            state_changed = True
 
     if not has_valid:
         await matcher.reject("无效的选择，请重新回复你想报名的项目字母。")
+
+    if state_changed:
+        save_state()
 
     res_msg = ""
     if joined:

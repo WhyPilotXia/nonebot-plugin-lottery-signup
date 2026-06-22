@@ -53,7 +53,7 @@ pip install "nonebot-plugin-lottery-signup[notion]"
 nonebot.load_plugin("nonebot_plugin_lottery_signup")
 ```
 
-插件依赖 `nonebot-plugin-apscheduler` 提供定时任务能力。通过 PyPI 安装本插件时会自动安装该依赖；如果未加载 APScheduler，定时抽奖和定时报名会不可用。
+插件依赖 `nonebot-plugin-apscheduler` 提供定时任务能力，并使用 `nonebot-plugin-localstore` 持久化尚未结束的抽奖和报名数据。通过 PyPI 安装本插件时会自动安装这些依赖；如果未加载 APScheduler，定时抽奖和定时报名会不可用。
 
 ## 配置
 

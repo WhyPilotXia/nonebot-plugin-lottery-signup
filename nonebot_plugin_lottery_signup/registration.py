@@ -4,6 +4,8 @@ from datetime import datetime
 from nonebot.adapters.onebot.v11 import ActionFailed, Bot, Message, MessageSegment
 from nonebot.log import logger
 
+from .persistence import save_state
+
 
 # registrations[group_id][registration_id] = {
 #     "name": str,
@@ -37,6 +39,8 @@ async def close_registration(bot: Bot, group_id: int, rid: str, reason: str = "t
 
     if not registrations[group_id]:
         del registrations[group_id]
+
+    save_state()
 
     name = rdata["name"]
     participants = rdata["participants"]

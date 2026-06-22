@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from nonebot.adapters.onebot.v11 import ActionFailed, Bot, Message, MessageSegment
 from nonebot.log import logger
 
+from .persistence import save_state
+
 
 # lotteries[group_id][lottery_id] = {"name": str, "time": datetime, "participants": {}}
 lotteries = defaultdict(dict)
@@ -64,6 +66,8 @@ async def execute_lottery(bot: Bot, group_id: int, lid: str):
 
     if not lotteries[group_id]:
         del lotteries[group_id]
+
+    save_state()
 
     participants = ldata["participants"]
     name = ldata["name"]
