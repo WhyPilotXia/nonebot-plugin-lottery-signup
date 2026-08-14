@@ -8,7 +8,7 @@ from nonebot_plugin_localstore import get_plugin_data_file
 
 
 STATE_FILE = get_plugin_data_file("scheduled_tasks.json")
-STATE_VERSION = 1
+STATE_VERSION = 2
 
 
 def _serialize_task(group_id: int, task_id: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -21,6 +21,7 @@ def _serialize_task(group_id: int, task_id: str, data: dict[str, Any]) -> dict[s
 def save_state() -> None:
     from .lottery import lotteries
     from .registration import registrations
+    from .reminder import lottery_reminder_users
 
     data = {
         "version": STATE_VERSION,
@@ -34,6 +35,7 @@ def save_state() -> None:
             for group_id, group_registrations in registrations.items()
             for rid, rdata in group_registrations.items()
         ],
+        "lottery_reminder_users": sorted(lottery_reminder_users, key=int),
     }
     temp_file = STATE_FILE.with_suffix(f"{STATE_FILE.suffix}.tmp")
     try:
@@ -82,6 +84,7 @@ def _load_task(
 def load_state() -> None:
     from .lottery import lotteries
     from .registration import registrations
+    from .reminder import lottery_reminder_users
 
     if not STATE_FILE.exists():
         return
@@ -96,7 +99,19 @@ def load_state() -> None:
 
     lotteries.clear()
     registrations.clear()
+    lottery_reminder_users.clear()
     skipped = 0
+
+    raw_reminder_users = data.get("lottery_reminder_users", [])
+    if isinstance(raw_reminder_users, list):
+        for user_id in raw_reminder_users:
+            normalized_user_id = str(user_id)
+            if normalized_user_id.isdigit():
+                lottery_reminder_users.add(normalized_user_id)
+            else:
+                skipped += 1
+    else:
+        skipped += 1
 
     raw_lotteries = data.get("lotteries", [])
     if not isinstance(raw_lotteries, list):
@@ -127,7 +142,8 @@ def load_state() -> None:
 
     logger.info(
         f"已恢复 {sum(map(len, lotteries.values()))} 个定时抽奖和 "
-        f"{sum(map(len, registrations.values()))} 个定时报名"
+        f"{sum(map(len, registrations.values()))} 个定时报名，"
+        f"{len(lottery_reminder_users)} 个抽奖提醒用户"
     )
     if skipped:
         logger.warning(f"持久化文件中有 {skipped} 条无效任务，已跳过")

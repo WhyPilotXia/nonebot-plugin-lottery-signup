@@ -9,7 +9,7 @@ from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
 from nonebot import on_command
 from nonebot.matcher import Matcher
-from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, ActionFailed
+from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, MessageEvent, ActionFailed
 from nonebot.adapters.onebot.v11 import MessageSegment, Message
 from nonebot.typing import T_State
 from nonebot.params import ArgPlainText, CommandArg
@@ -21,6 +21,7 @@ __plugin_meta__ = PluginMetadata(
     description="适用于 OneBot V11 的群聊定时抽奖、即时抽奖和限额报名插件",
     usage=(
         "/定时抽奖 项目名称 3h后\n"
+        "/抽奖提醒 开启|关闭\n"
         "/报名 [选项字母]\n"
         "/抽奖 @用户1 @用户2\n"
         "/创建报名 项目名 5人 2026-6-18T18-00\n"
@@ -44,6 +45,7 @@ require("nonebot_plugin_localstore")
 from .lottery import execute_lottery, lotteries, parse_target_time
 from .persistence import load_state, restore_scheduled_tasks, save_state
 from .registration import close_registration, make_registration_id, registrations
+from .reminder import notify_lottery_reminder_users, set_lottery_reminder
 from .utils import (
     At,
     get_display_name_by_identity,
@@ -393,6 +395,22 @@ async def _process_stop_registration_choices(
 
 create_lottery_cmd = on_command("定时抽奖", priority=5, block=True)
 
+lottery_reminder_cmd = on_command("抽奖提醒", priority=5, block=True)
+
+
+@lottery_reminder_cmd.handle()
+async def _set_lottery_reminder(event: MessageEvent, args: Message = CommandArg()):
+    action = args.extract_plain_text().strip()
+    if action not in {"开启", "关闭"}:
+        await lottery_reminder_cmd.finish("格式错误！请输入：/抽奖提醒 开启 或 /抽奖提醒 关闭")
+
+    enabled = action == "开启"
+    changed = set_lottery_reminder(event.get_user_id(), enabled)
+    if changed:
+        await lottery_reminder_cmd.finish(f"已{action}定时抽奖提醒。")
+
+    await lottery_reminder_cmd.finish(f"定时抽奖提醒已经是{action}状态。")
+
 
 @create_lottery_cmd.handle()
 async def _create_lottery(bot: Bot, event: GroupMessageEvent, args: Message = CommandArg()):
@@ -448,9 +466,10 @@ async def _create_lottery(bot: Bot, event: GroupMessageEvent, args: Message = Co
     )
     save_state()
 
-    await create_lottery_cmd.finish(
+    await create_lottery_cmd.send(
         f"已成功创建抽奖项目【{name}】\n开奖时间：{target_time.strftime('%Y-%m-%d %H:%M:%S')}\n群友发送 /报名 即可参与！",reply=True
     )
+    await notify_lottery_reminder_users(bot, group_id)
 
 
 join_lottery_cmd = on_command("报名", priority=5, block=True)
